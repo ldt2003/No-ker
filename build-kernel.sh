@@ -24,7 +24,7 @@ nocol='\033[0m'
 if [ ! -d "$MAIN/clang" ]; then
     echo "No clang compiler found ... Downloading AOSP Clang"
 
-    CLANG_VERSION="clang-r536225"
+    CLANG_VERSION="clang-r547379"
     CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/${CLANG_VERSION}.tgz"
     ARCHIVE_NAME="aosp-clang.tar.gz"
 
