@@ -365,10 +365,10 @@ else
 HOSTCC	= gcc
 HOSTCXX	= g++
 endif
-KBUILD_HOSTCFLAGS   := -Wall -Wmissing-prototypes -Wstrict-prototypes -O3 \
+KBUILD_HOSTCFLAGS   := -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 \
 		-fomit-frame-pointer -std=gnu89 $(HOST_LFS_CFLAGS) \
 		$(HOSTCFLAGS)
-KBUILD_HOSTCXXFLAGS := -O3 $(HOST_LFS_CFLAGS) $(HOSTCXXFLAGS)
+KBUILD_HOSTCXXFLAGS := -O2 $(HOST_LFS_CFLAGS) $(HOSTCXXFLAGS)
 KBUILD_HOSTLDFLAGS  := $(HOST_LFS_LDFLAGS) $(HOSTLDFLAGS)
 KBUILD_HOSTLDLIBS   := $(HOST_LFS_LIBS) $(HOSTLDLIBS)
 
@@ -685,9 +685,14 @@ KBUILD_LDFLAGS  += -Os
 else ifeq ($(cc-name),clang)
 #Enable hot cold split optimization
 KBUILD_CFLAGS   += -mllvm -hot-cold-split=true
-KBUILD_CFLAGS   += -O3 -march=armv8.2-a+lse+crypto+dotprod --cuda-path=/dev/null
-KBUILD_AFLAGS   += -O3 -march=armv8.2-a+lse+crypto+dotprod
-KBUILD_LDFLAGS  += -O3 --plugin-opt=O3
+KBUILD_CFLAGS   += -O2 -march=armv8.2-a+lse+crypto+dotprod -fno-trapping-math -fno-math-errno 
+KBUILD_AFLAGS   += -O2 -march=armv8.2-a+lse+crypto+dotprod
+KBUILD_LDFLAGS  += -O2 --plugin-opt=O2
+KBUILD_CFLAGS   += -march=armv8.2-a+crypto+fp16+dotprod+nosve -mcpu=cortex-a55 -mtune=cortex-a55
+KBUILD_AFLAGS   += -march=armv8.2-a+crypto+fp16+dotprod+nosve -mcpu=cortex-a55 -mtune=cortex-a55
+ifeq ($(CONFIG_LD_IS_LLD), y)
+KBUILD_LDFLAGS  += -mllvm -mcpu=cortex-a55
+endif
 else
 KBUILD_CFLAGS   += -O2
 KBUILD_AFLAGS   += -O2
@@ -798,9 +803,9 @@ endif
 KBUILD_CFLAGS += $(call cc-disable-warning, unused-but-set-variable)
 
 ifdef CONFIG_LTO_CLANG
-KBUILD_LDFLAGS += -O3 --lto-O3 --strip-debug
+KBUILD_LDFLAGS += -O2 --lto-O2 --strip-debug
 else
-KBUILD_LDFLAGS += -O3 --strip-debug
+KBUILD_LDFLAGS += -O2 --strip-debug
 endif
 
 KBUILD_CFLAGS += $(call cc-disable-warning, unused-const-variable)
@@ -929,28 +934,27 @@ export CC_FLAGS_SCS
 endif
 
 ifdef CONFIG_LTO_CLANG
-ifdef CONFIG_LTO_CLANG_THIN
-CC_FLAGS_LTO	+= -flto=thin -fsplit-lto-unit -funified-lto
-KBUILD_LDFLAGS	+= --thinlto-jobs=$(nproc --all)
-else
-CC_FLAGS_LTO	+= -flto
-endif
-CC_FLAGS_LTO	+= -fvisibility=hidden
+    ifdef CONFIG_LTO_CLANG_THIN
+        # Thin LTO Configuration
+        CC_FLAGS_LTO += -flto=thin -fsplit-lto-unit -funified-lto
+        KBUILD_LDFLAGS += --thinlto-cache-dir=.thinlto-cache --thinlto-jobs=$(nproc --all)
+    else
+        # Full LTO Configuration
+        CC_FLAGS_LTO += -flto=full -fvisibility=hidden -fsplit-machine-functions -fstack-protector-strong
 
-CC_FLAGS_LTO	+= -fsplit-machine-functions
+        # Reduce binary size by limiting inlining across translation units
+        KBUILD_LDFLAGS += -mllvm -import-instr-limit=50
+    endif
 
-# Limit inlining across translation units to reduce binary size
-KBUILD_LDFLAGS += -mllvm -import-instr-limit=40
-
-# Check for frame size exceeding threshold during prolog/epilog insertion.
-ifneq ($(CONFIG_FRAME_WARN),0)
-KBUILD_LDFLAGS	+= -plugin-opt=-warn-stack-size=$(CONFIG_FRAME_WARN)
-endif
+    # Optional: Optimize frame size (adjust based on needs)
+    ifneq ($(CONFIG_FRAME_WARN),0)
+        KBUILD_LDFLAGS += -plugin-opt=-warn-stack-size=$(CONFIG_FRAME_WARN)
+    endif
 endif
 
 ifdef CONFIG_LTO
-KBUILD_CFLAGS	+= $(CC_FLAGS_LTO)
-export CC_FLAGS_LTO
+    KBUILD_CFLAGS += $(CC_FLAGS_LTO)
+    export CC_FLAGS_LTO
 endif
 
 # arch Makefile may override CC so keep this after arch Makefile is included
