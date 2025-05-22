@@ -23,8 +23,17 @@ jobs:
       - name: Download and extract Proton Clang
         run: |
           mkdir -p clang
-          curl -Lo clang/proton-clang.tar.gz https://github.com/kdrag0n/proton-clang/releases/latest/download/proton-clang.tar.gz
+          curl -Lo clang/proton-clang.tar.gz https://github.com/LineageOS/android_prebuilt_clang/releases/download/18.1.8-r3/proton-clang-18.1.8.tar.gz
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to download Proton Clang"
+            exit 1
+          fi
+          file clang/proton-clang.tar.gz | grep -q "gzip compressed data" || { echo "Error: Downloaded file is not a valid gzip archive"; exit 1; }
           tar -C clang -xzf clang/proton-clang.tar.gz --strip-components=1
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to extract Proton Clang"
+            exit 1
+          fi
 
       # Bước 4: Thiết lập biến môi trường
       - name: Set environment variables
@@ -68,7 +77,7 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             CC=clang \
             LLVM=1 \
-            M=drivers/<your_driver_path> modules
+            modules
         env:
           KDIR: /lib/modules/$(uname -r)/build
 
@@ -86,10 +95,10 @@ jobs:
         with:
           name: kernel-modules
           path: |
-            out/drivers/<your_driver_path>/*.ko
+            out/**/*.ko
           retention-days: 7
 
       # Bước 10: Kiểm tra kết quả
       - name: Verify artifacts
         run: |
-          ls -l out/Module.symvers out/drivers/<your_driver_path>/*.ko || echo "No artifacts found"
+          ls -l out/Module.symvers out/**/*.ko || echo "No artifacts found"
