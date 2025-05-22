@@ -1,12 +1,7 @@
-name: Build Kernel Module with Custom Config
+name: KernelSU Build
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,51 +9,87 @@ jobs:
 
     steps:
       # Bước 1: Tải mã nguồn từ kho lưu trữ
-      - name: Checkout repository
+      - name: Checkout source
         uses: actions/checkout@v4
 
       # Bước 2: Cài đặt công cụ và kernel headers
-      - name: Install dependencies
+      - name: Set up environment
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential linux-headers-$(uname -r) kmod bc flex bison libelf-dev libssl-dev
+          sudo apt update
+          sudo apt install -y bc bison build-essential cpio curl flex git libssl-dev \
+            libncurses-dev lzop python3 unzip zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
-      # Bước 3: Sao chép .config vào thư mục kernel
+      # Bước 3: Tải và giải nén Proton Clang
+      - name: Download and extract Proton Clang
+        run: |
+          mkdir -p clang
+          curl -Lo clang/proton-clang.tar.gz https://github.com/kdrag0n/proton-clang/releases/latest/download/proton-clang.tar.gz
+          tar -C clang -xzf clang/proton-clang.tar.gz --strip-components=1
+
+      # Bước 4: Thiết lập biến môi trường
+      - name: Set environment variables
+        run: |
+          echo "CLANG_PATH=$GITHUB_WORKSPACE/clang" >> $GITHUB_ENV
+          echo "PATH=$GITHUB_WORKSPACE/clang/bin:$PATH" >> $GITHUB_ENV
+
+      # Bước 5: Kiểm tra và sao chép .config
       - name: Copy .config
         run: |
           if [ -f .config ]; then
             echo "Found .config in repository root"
+            mkdir -p out
+            cp .config out/.config
           else
             echo "Error: .config not found in repository root"
             exit 1
           fi
 
-      # Bước 4: Chuẩn bị môi trường kernel với .config
+      # Bước 6: Chuẩn bị môi trường kernel
       - name: Prepare kernel build environment
         run: |
-          make olddefconfig
-          make modules_prepare
-        env:
-          KDIR: /lib/modules/$(uname -r)/build
+          make O=out ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            CC=clang \
+            LLVM=1 \
+            olddefconfig
+          make O=out ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            CC=clang \
+            LLVM=1 \
+            modules_prepare
 
-      # Bước 5: Biên dịch kernel module
-      - name: Build kernel module
+      # Bước 7: Biên dịch kernel modules
+      - name: Build kernel modules
         run: |
-          make M=drivers/<your_driver_path> modules
+          make O=out ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            CC=clang \
+            LLVM=1 \
+            M=drivers/<your_driver_path> modules
         env:
           KDIR: /lib/modules/$(uname -r)/build
 
-      # Bước 6: Lưu trữ driver (.ko) và Module.symvers
-      - name: Upload artifacts
+      # Bước 8: Lưu trữ Module.symvers
+      - name: Upload Module.symvers
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-module-artifacts
-          path: |
-            drivers/<your_driver_path>/*.ko
-            Module.symvers
+          name: Module.symvers
+          path: out/Module.symvers
           retention-days: 7
 
-      # Bước 7: Kiểm tra kết quả
+      # Bước 9: Lưu trữ .ko modules
+      - name: Upload .ko modules
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-modules
+          path: |
+            out/drivers/<your_driver_path>/*.ko
+          retention-days: 7
+
+      # Bước 10: Kiểm tra kết quả
       - name: Verify artifacts
         run: |
-          ls -l drivers/<your_driver_path>/*.ko Module.symvers || echo "No artifacts found"
+          ls -l out/Module.symvers out/drivers/<your_driver_path>/*.ko || echo "No artifacts found"
