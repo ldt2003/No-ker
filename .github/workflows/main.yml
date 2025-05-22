@@ -56,7 +56,6 @@ jobs:
             grep -E "HOSTLD|LD|HOSTCC" Makefile || echo "No HOSTLD/LD/HOSTCC found"
             sed -i '/ifneq ($(LLVM),)/,/endif/ s/HOSTCC.*=.*/HOSTCC = gcc/' Makefile
             sed -i '/ifneq ($(LLVM),)/,/endif/ s/LD.*=.*/LD = \/usr\/bin\/ld/' Makefile
-            echo "Adding explicit HOSTLD"
             echo "HOSTLD = /usr/bin/ld" >> Makefile
             echo "Patched Makefile:"
             grep -E "HOSTLD|LD|HOSTCC" Makefile
@@ -67,16 +66,18 @@ jobs:
           if [ -f scripts/Makefile.host ]; then
             echo "Checking scripts/Makefile.host"
             grep -E "HOSTLD|LD|HOSTCC" scripts/Makefile.host || echo "No HOSTLD/LD/HOSTCC in scripts/Makefile.host"
-            sed -i 's/HOSTLD.*=.*/HOSTLD = \/usr\/bin\/ld/' scripts/Makefile.host
-            sed -i 's/HOSTCC.*=.*/HOSTCC = gcc/' scripts/Makefile.host
+            echo "HOSTLD = /usr/bin/ld" >> scripts/Makefile.host
+            echo "HOSTCC = gcc" >> scripts/Makefile.host
             echo "Patched scripts/Makefile.host:"
-            grep -E "HOSTLD|LD|HOSTCC" scripts/Makefile.host
+            cat scripts/Makefile.host
           fi
           if [ -f scripts/basic/Makefile ]; then
             echo "Checking scripts/basic/Makefile"
             grep -E "HOSTLD|LD|HOSTCC" scripts/basic/Makefile || echo "No HOSTLD/LD/HOSTCC in scripts/basic/Makefile"
-            sed -i 's/HOSTLD.*=.*/HOSTLD = \/usr\/bin\/ld/' scripts/basic/Makefile
-            sed -i 's/HOSTCC.*=.*/HOSTCC = gcc/' scripts/basic/Makefile
+            echo "HOSTLD = /usr/bin/ld" >> scripts/basic/Makefile
+            echo "HOSTCC = gcc" >> scripts/basic/Makefile
+            echo "Patched scripts/basic/Makefile:"
+            cat scripts/basic/Makefile
           fi
           if [ -f drivers/kernelsu/Makefile ]; then
             echo "Checking module Makefile"
