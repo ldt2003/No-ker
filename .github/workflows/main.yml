@@ -1,4 +1,4 @@
-name: KernelSU Build
+name: Kernel Module Build
 
 on:
   workflow_dispatch:
@@ -11,6 +11,9 @@ jobs:
       # Bước 1: Tải mã nguồn từ kho lưu trữ
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          repository: ldt2003/No-ker
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # Bước 2: Cài đặt công cụ và phụ thuộc
       - name: Set up environment
@@ -18,7 +21,7 @@ jobs:
           sudo apt update
           sudo apt install -y bc bison build-essential cpio curl flex git libssl-dev \
             libncurses-dev lzop python3 unzip zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
-            libc6-dev binutils
+            libc6-dev binutils libgcc-s1 libstdc++6 gcc
 
       # Bước 3: Tải và giải nén Silont Clang
       - name: Download and extract Silont Clang
@@ -42,8 +45,47 @@ jobs:
           echo "CLANG_PATH=$GITHUB_WORKSPACE/clang" >> $GITHUB_ENV
           echo "PATH=$GITHUB_WORKSPACE/clang/bin:$PATH" >> $GITHUB_ENV
           echo "LD=/usr/bin/ld" >> $GITHUB_ENV
+          echo "HOSTLD=/usr/bin/ld" >> $GITHUB_ENV
+          echo "HOSTCC=gcc" >> $GITHUB_ENV
 
-      # Bước 5: Kiểm tra và sao chép .config
+      # Bước 5: Kiểm tra và sửa Makefile
+      - name: Check and patch Makefile
+        run: |
+          if [ -f Makefile ]; then
+            echo "Checking main Makefile"
+            grep -E "HOSTLD|LD|HOSTCC" Makefile || echo "No HOSTLD/LD/HOSTCC found"
+            sed -i '/ifneq ($(LLVM),)/,/endif/ s/HOSTCC.*=.*/HOSTCC = gcc/' Makefile
+            sed -i '/ifneq ($(LLVM),)/,/endif/ s/LD.*=.*/LD = \/usr\/bin\/ld/' Makefile
+            echo "Adding explicit HOSTLD"
+            echo "HOSTLD = /usr/bin/ld" >> Makefile
+            echo "Patched Makefile:"
+            grep -E "HOSTLD|LD|HOSTCC" Makefile
+          else
+            echo "Error: Main Makefile not found"
+            exit 1
+          fi
+          if [ -f scripts/Makefile.host ]; then
+            echo "Checking scripts/Makefile.host"
+            grep -E "HOSTLD|LD|HOSTCC" scripts/Makefile.host || echo "No HOSTLD/LD/HOSTCC in scripts/Makefile.host"
+            sed -i 's/HOSTLD.*=.*/HOSTLD = \/usr\/bin\/ld/' scripts/Makefile.host
+            sed -i 's/HOSTCC.*=.*/HOSTCC = gcc/' scripts/Makefile.host
+            echo "Patched scripts/Makefile.host:"
+            grep -E "HOSTLD|LD|HOSTCC" scripts/Makefile.host
+          fi
+          if [ -f scripts/basic/Makefile ]; then
+            echo "Checking scripts/basic/Makefile"
+            grep -E "HOSTLD|LD|HOSTCC" scripts/basic/Makefile || echo "No HOSTLD/LD/HOSTCC in scripts/basic/Makefile"
+            sed -i 's/HOSTLD.*=.*/HOSTLD = \/usr\/bin\/ld/' scripts/basic/Makefile
+            sed -i 's/HOSTCC.*=.*/HOSTCC = gcc/' scripts/basic/Makefile
+          fi
+          if [ -f drivers/kernelsu/Makefile ]; then
+            echo "Checking module Makefile"
+            cat drivers/kernelsu/Makefile
+          else
+            echo "Warning: drivers/kernelsu/Makefile not found"
+          fi
+
+      # Bước 6: Kiểm tra và sao chép .config
       - name: Copy .config
         run: |
           if [ -f .config ]; then
@@ -55,7 +97,7 @@ jobs:
             exit 1
           fi
 
-      # Bước 6: Chuẩn bị môi trường kernel
+      # Bước 7: Chuẩn bị môi trường kernel
       - name: Prepare kernel build environment
         run: |
           make O=out ARCH=arm64 \
@@ -63,6 +105,8 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             CC=clang \
             LD=/usr/bin/ld \
+            HOSTLD=/usr/bin/ld \
+            HOSTCC=gcc \
             LLVM=1 \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             olddefconfig
@@ -71,11 +115,13 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             CC=clang \
             LD=/usr/bin/ld \
+            HOSTLD=/usr/bin/ld \
+            HOSTCC=gcc \
             LLVM=1 \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             modules_prepare
 
-      # Bước 7: Biên dịch kernel modules
+      # Bước 8: Biên dịch kernel modules
       - name: Build kernel modules
         run: |
           make O=out ARCH=arm64 \
@@ -83,11 +129,13 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             CC=clang \
             LD=/usr/bin/ld \
+            HOSTLD=/usr/bin/ld \
+            HOSTCC=gcc \
             LLVM=1 \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             M=drivers/kernelsu modules
 
-      # Bước 8: Lưu trữ Module.symvers
+      # Bước 9: Lưu trữ Module.symvers
       - name: Upload Module.symvers
         uses: actions/upload-artifact@v4
         with:
@@ -95,7 +143,7 @@ jobs:
           path: out/Module.symvers
           retention-days: 7
 
-      # Bước 9: Lưu trữ .ko modules
+      # Bước 10: Lưu trữ .ko modules
       - name: Upload .ko modules
         uses: actions/upload-artifact@v4
         with:
@@ -104,7 +152,7 @@ jobs:
             out/drivers/kernelsu/*.ko
           retention-days: 7
 
-      # Bước 10: Kiểm tra kết quả
+      # Bước 11: Kiểm tra kết quả
       - name: Verify artifacts
         run: |
           ls -l out/Module.symvers out/drivers/kernelsu/*.ko || echo "No artifacts found"
