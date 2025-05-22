@@ -19,19 +19,19 @@ jobs:
           sudo apt install -y bc bison build-essential cpio curl flex git libssl-dev \
             libncurses-dev lzop python3 unzip zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
-      # Bước 3: Tải và giải nén Proton Clang
-      - name: Download and extract Proton Clang
+      # Bước 3: Tải và giải nén AOSP Clang
+      - name: Download and extract AOSP Clang
         run: |
           mkdir -p clang
-          curl -Lo clang/proton-clang.tar.gz https://github.com/LineageOS/android_prebuilt_clang/releases/download/18.1.8-r3/proton-clang-18.1.8.tar.gz
+          curl -Lo clang/clang.tar.gz https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-14.0.0_r2/clang-r487747b.tar.gz
           if [ $? -ne 0 ]; then
-            echo "Error: Failed to download Proton Clang"
+            echo "Error: Failed to download AOSP Clang"
             exit 1
           fi
-          file clang/proton-clang.tar.gz | grep -q "gzip compressed data" || { echo "Error: Downloaded file is not a valid gzip archive"; exit 1; }
-          tar -C clang -xzf clang/proton-clang.tar.gz --strip-components=1
+          file clang/clang.tar.gz | grep -q "gzip compressed data" || { echo "Error: Downloaded file is not a valid gzip archive"; exit 1; }
+          tar -C clang -xzf clang/clang.tar.gz --strip-components=1
           if [ $? -ne 0 ]; then
-            echo "Error: Failed to extract Proton Clang"
+            echo "Error: Failed to extract AOSP Clang"
             exit 1
           fi
 
@@ -61,12 +61,14 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             CC=clang \
             LLVM=1 \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
             olddefconfig
           make O=out ARCH=arm64 \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             CC=clang \
             LLVM=1 \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
             modules_prepare
 
       # Bước 7: Biên dịch kernel modules
@@ -77,6 +79,7 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             CC=clang \
             LLVM=1 \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
             modules
         env:
           KDIR: /lib/modules/$(uname -r)/build
