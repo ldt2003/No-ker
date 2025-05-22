@@ -1,0 +1,57 @@
+name: Kernel Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout kernel source
+      uses: actions/checkout@v4
+
+    - name: Set up build environment
+      run: |
+        sudo apt update
+        sudo apt install -y bc bison flex libssl-dev make libncurses-dev ccache gcc clang git wget
+
+    - name: Download and extract Proton Clang
+      run: |
+        wget https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.zip
+        unzip master.zip
+        mv proton-clang-master proton-clang
+
+    - name: Make defconfig
+      run: |
+        export PATH=$GITHUB_WORKSPACE/proton-clang/bin:$PATH
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export CLANG_TRIPLE=aarch64-linux-gnu-
+        make O=out deconfig1
+
+    - name: Build kernel
+      run: |
+        export PATH=$GITHUB_WORKSPACE/proton-clang/bin:$PATH
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export CLANG_TRIPLE=aarch64-linux-gnu-
+        make -j$(nproc) O=out
+
+    - name: Install modules
+      run: |
+        export ARCH=arm64
+        make O=out INSTALL_MOD_PATH=out/modules_install modules_install
+
+    - name: Upload Module.symvers
+      uses: actions/upload-artifact@v4
+      with:
+        name: module-symvers
+        path: out/Module.symvers
+
+    - name: Upload kernel modules
+      uses: actions/upload-artifact@v4
+      with:
+        name: kernel-modules
+        path: out/modules_install/lib/modules/
+        
