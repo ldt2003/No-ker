@@ -19,19 +19,19 @@ jobs:
           sudo apt install -y bc bison build-essential cpio curl flex git libssl-dev \
             libncurses-dev lzop python3 unzip zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
-      # Bước 3: Tải và giải nén Proton Clang
-      - name: Download and extract Proton Clang
+      # Bước 3: Tải và giải nén Silont Clang
+      - name: Download and extract Silont Clang
         run: |
           mkdir -p clang
-          curl -Lo clang/proton-clang.tar.gz https://github.com/arter97/proton-clang/releases/download/20200502/proton-clang-20200502.tar.gz
+          curl -Lo clang/silont-clang.tar.gz https://github.com/silont-project/silont-clang/tarball/master
           if [ $? -ne 0 ]; then
-            echo "Error: Failed to download Proton Clang"
+            echo "Error: Failed to download Silont Clang"
             exit 1
           fi
-          file clang/proton-clang.tar.gz | grep -q "gzip compressed data" || { echo "Error: Downloaded file is not a valid gzip archive"; exit 1; }
-          tar -C clang -xzf clang/proton-clang.tar.gz --strip-components=1
+          file clang/silont-clang.tar.gz | grep -q "gzip compressed data" || { echo "Error: Downloaded file is not a valid gzip archive"; exit 1; }
+          tar -C clang -xzf clang/silont-clang.tar.gz --strip-components=1
           if [ $? -ne 0 ]; then
-            echo "Error: Failed to extract Proton Clang"
+            echo "Error: Failed to extract Silont Clang"
             exit 1
           fi
 
