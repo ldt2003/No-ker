@@ -1,51 +1,64 @@
-name: Kernel Build
+name: Build Kernel Module with Custom Config
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout source
-      uses: actions/checkout@v3
+      # Bước 1: Tải mã nguồn từ kho lưu trữ
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install -y bc bison flex libssl-dev make libc6-dev libncurses5-dev gcc git wget cpio python3 unzip
+      # Bước 2: Cài đặt công cụ và kernel headers
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential linux-headers-$(uname -r) kmod bc flex bison libelf-dev libssl-dev
 
-    - name: Download and extract Proton Clang
-      run: |
-        mkdir -p clang
-        curl -LO https://gitlab.com/baalajimaestro/proton-clang/-/archive/20240501/proton-clang-20240501.tar.gz
-        tar -xvzf proton-clang-20240501.tar.gz -C clang --strip-components=1
+      # Bước 3: Sao chép .config vào thư mục kernel
+      - name: Copy .config
+        run: |
+          if [ -f .config ]; then
+            echo "Found .config in repository root"
+          else
+            echo "Error: .config not found in repository root"
+            exit 1
+          fi
 
-    - name: Set environment variables
-      run: |
-        export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
-        export CLANG_TRIPLE=aarch64-linux-gnu-
-        export CROSS_COMPILE=aarch64-linux-android-
-        export CROSS_COMPILE_ARM32=arm-linux-androideabi-
-        echo "PATH=$GITHUB_WORKSPACE/clang/bin:$PATH" >> $GITHUB_ENV
-        echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
-        echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
-        echo "CROSS_COMPILE_ARM32=arm-linux-androideabi-" >> $GITHUB_ENV
+      # Bước 4: Chuẩn bị môi trường kernel với .config
+      - name: Prepare kernel build environment
+        run: |
+          make olddefconfig
+          make modules_prepare
+        env:
+          KDIR: /lib/modules/$(uname -r)/build
 
-    - name: Build kernel
-      run: |
-        mkdir -p out
-        make O=out ARCH=arm64 deconfig1
-        make -j$(nproc) O=out ARCH=arm64 CC=clang
+      # Bước 5: Biên dịch kernel module
+      - name: Build kernel module
+        run: |
+          make M=drivers/<your_driver_path> modules
+        env:
+          KDIR: /lib/modules/$(uname -r)/build
 
-    - name: Upload drivers (.ko files)
-      uses: actions/upload-artifact@v3
-      with:
-        name: kernel-modules
-        path: |
-          out/**/*.ko
+      # Bước 6: Lưu trữ driver (.ko) và Module.symvers
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-module-artifacts
+          path: |
+            drivers/<your_driver_path>/*.ko
+            Module.symvers
+          retention-days: 7
 
-    - name: Upload Module.symvers
-      uses: actions/upload-artifact@v3
-      with:
-        name: Module.symvers
-        path: out/Module.symvers
+      # Bước 7: Kiểm tra kết quả
+      - name: Verify artifacts
+        run: |
+          ls -l drivers/<your_driver_path>/*.ko Module.symvers || echo "No artifacts found"
