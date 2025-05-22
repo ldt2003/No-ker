@@ -19,19 +19,19 @@ jobs:
           sudo apt install -y bc bison build-essential cpio curl flex git libssl-dev \
             libncurses-dev lzop python3 unzip zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
-      # Bước 3: Tải và giải nén AOSP Clang
-      - name: Download and extract AOSP Clang
+      # Bước 3: Tải và giải nén Clang
+      - name: Download and extract Clang
         run: |
           mkdir -p clang
-          curl -Lo clang/clang.tar.gz https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-14.0.0_r2/clang-r487747b.tar.gz
+          curl -Lo clang/clang.tar.gz https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86/releases/download/r487747/clang-r487747.tar.gz
           if [ $? -ne 0 ]; then
-            echo "Error: Failed to download AOSP Clang"
+            echo "Error: Failed to download Clang"
             exit 1
           fi
           file clang/clang.tar.gz | grep -q "gzip compressed data" || { echo "Error: Downloaded file is not a valid gzip archive"; exit 1; }
           tar -C clang -xzf clang/clang.tar.gz --strip-components=1
           if [ $? -ne 0 ]; then
-            echo "Error: Failed to extract AOSP Clang"
+            echo "Error: Failed to extract Clang"
             exit 1
           fi
 
