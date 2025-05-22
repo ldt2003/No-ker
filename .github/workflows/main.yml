@@ -1,4 +1,4 @@
-name: KernelSU Build
+name: Kernel Build
 
 on:
   workflow_dispatch:
@@ -11,51 +11,41 @@ jobs:
     - name: Checkout source
       uses: actions/checkout@v3
 
-    - name: Set up environment
-      run: |
-        sudo apt update
-        sudo apt install -y bc bison build-essential cpio curl flex git libssl-dev \
-          libncurses-dev lzop python3 unzip zip
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y bc bison flex libssl-dev make libc6-dev libncurses5-dev gcc git wget cpio python3 unzip
 
     - name: Download and extract Proton Clang
       run: |
         mkdir -p clang
-        curl -Lo clang/proton-clang.tar.gz https://github.com/kdrag0n/proton-clang/releases/latest/download/clang-llvm.tar.gz
-        tar -C clang -xzf clang/proton-clang.tar.gz --strip-components=1
+        curl -LO https://gitlab.com/baalajimaestro/proton-clang/-/archive/20240501/proton-clang-20240501.tar.gz
+        tar -xvzf proton-clang-20240501.tar.gz -C clang --strip-components=1
 
     - name: Set environment variables
       run: |
-        echo "CLANG_PATH=$GITHUB_WORKSPACE/clang" >> $GITHUB_ENV
+        export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
+        export CLANG_TRIPLE=aarch64-linux-gnu-
+        export CROSS_COMPILE=aarch64-linux-android-
+        export CROSS_COMPILE_ARM32=arm-linux-androideabi-
         echo "PATH=$GITHUB_WORKSPACE/clang/bin:$PATH" >> $GITHUB_ENV
+        echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
+        echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
+        echo "CROSS_COMPILE_ARM32=arm-linux-androideabi-" >> $GITHUB_ENV
 
-    - name: Prepare output folder
-      run: mkdir out
-
-    - name: Copy .config
-      run: cp config out/.config
-
-    - name: Start kernel build
+    - name: Build kernel
       run: |
-        make O=out ARCH=arm64 \
-          CROSS_COMPILE=aarch64-linux-gnu- \
-          CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-          CC=clang \
-          LLVM=1 \
-          olddefconfig
-        make -j$(nproc) O=out ARCH=arm64 \
-          CROSS_COMPILE=aarch64-linux-gnu- \
-          CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-          CC=clang \
-          LLVM=1
+        mkdir -p out
+        make O=out ARCH=arm64 deconfig1
+        make -j$(nproc) O=out ARCH=arm64 CC=clang
+
+    - name: Upload drivers (.ko files)
+      uses: actions/upload-artifact@v3
+      with:
+        name: kernel-modules
+        path: |
+          out/**/*.ko
 
     - name: Upload Module.symvers
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
         name: Module.symvers
         path: out/Module.symvers
-
-    - name: Upload .ko modules
-      uses: actions/upload-artifact@v4
-      with:
-        name: kernel-modules
-        path: out/lib/modules/
