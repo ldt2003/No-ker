@@ -1,57 +1,41 @@
-name: Kernel Build
+name: Build Kernel Modules
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout kernel source
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
-    - name: Set up build environment
+    - name: Setup proton-clang
       run: |
-        sudo apt update
-        sudo apt install -y bc bison flex libssl-dev make libncurses-dev ccache gcc clang git wget
+        git clone --depth=1 https://github.com/kdrag0n/proton-clang.git
 
-    - name: Download and extract Proton Clang
+    - name: Prepare build
       run: |
-        wget https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.zip
-        unzip master.zip
-        mv proton-clang-master proton-clang
+        export PATH="$GITHUB_WORKSPACE/proton-clang/bin:$PATH"
+        mkdir out
+        make O=out ARCH=arm64 CC=clang olddefconfig
+        make O=out ARCH=arm64 CC=clang modules_prepare
 
-    - name: Make defconfig
+    - name: Build kernel modules
       run: |
-        export PATH=$GITHUB_WORKSPACE/proton-clang/bin:$PATH
-        export ARCH=arm64
-        export SUBARCH=arm64
-        export CLANG_TRIPLE=aarch64-linux-gnu-
-        make O=out deconfig1
-
-    - name: Build kernel
-      run: |
-        export PATH=$GITHUB_WORKSPACE/proton-clang/bin:$PATH
-        export ARCH=arm64
-        export SUBARCH=arm64
-        export CLANG_TRIPLE=aarch64-linux-gnu-
-        make -j$(nproc) O=out
-
-    - name: Install modules
-      run: |
-        export ARCH=arm64
-        make O=out INSTALL_MOD_PATH=out/modules_install modules_install
+        export PATH="$GITHUB_WORKSPACE/proton-clang/bin:$PATH"
+        make -j$(nproc) O=out ARCH=arm64 CC=clang modules
 
     - name: Upload Module.symvers
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
-        name: module-symvers
+        name: Module.symvers
         path: out/Module.symvers
 
-    - name: Upload kernel modules
-      uses: actions/upload-artifact@v4
+    - name: Upload .ko modules
+      uses: actions/upload-artifact@v3
       with:
         name: kernel-modules
-        path: out/modules_install/lib/modules/
-        
+        path: out/lib/modules/
